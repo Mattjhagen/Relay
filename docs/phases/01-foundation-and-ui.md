@@ -496,3 +496,7 @@ The project intentionally prioritizes long-term maintainability over rapid featu
 Networking, SSH, terminal emulation, persistence, and server management are deferred to dedicated future phases to keep the initial codebase clean and focused.
 
 Future additions should update this section whenever a significant architectural decision is made so the reasoning behind the evolution of Relay is preserved.
+
+2026-07-15 (Remediation)
+
+Completed Phase 1 remediation to strictly enforce the authoritative scope. Reusable components (e.g. `RelayCard`, `ShortcutKeyChip`) were extracted and annotated with accessible semantics and broad `@Preview` coverage. MVVM was documented accurately as stateless placeholders for Phase 1. Demo data was isolated under `core.preview`. Adaptive navigation logic was introduced to intelligently swap between bottom navigation and a navigation rail. A dedicated `./gradlew` wrapper was established.
