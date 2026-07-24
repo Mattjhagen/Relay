@@ -1,0 +1,47 @@
+# Relay — Full Product Context
+
+Canonical URL: https://relayapp.pro/
+Live product: https://app.relayapp.pro/
+Publisher: Relay
+Source: https://github.com/Mattjhagen/Relay
+
+## Summary
+
+Relay is an open-source AI development platform designed to let developers work with coding agents from desktop and mobile devices. Its live browser product is Archon IDE, a multi-model AI software-development workspace with project management, durable conversations, source editing, terminal access, search, Git workflows, and local or private AI provider support.
+
+## Archon IDE
+
+Archon IDE is available at https://app.relayapp.pro/. It is designed for autonomous, multi-step software development and supports user-controlled reasoning depth. It can work with supported hosted providers such as OpenAI, Anthropic, and Google Gemini, as well as supported local or private providers such as Ollama and OpenCode.
+
+## Product values
+
+- Open-source development
+- User-controlled model and provider choice
+- Durable project and conversation continuity
+- Mobile and desktop access
+- Local and private infrastructure options
+- Human review of source changes and Git diffs
+
+## Canonical links
+
+- Relay website: https://relayapp.pro/
+- Archon IDE: https://app.relayapp.pro/
+- Relay source: https://github.com/Mattjhagen/Relay
+- Archon IDE source: https://github.com/Mattjhagen/archon-ide
+- Archon iOS source: https://github.com/Mattjhagen/archon-ios
+- Website sitemap: https://relayapp.pro/sitemap.xml
+- App sitemap: https://app.relayapp.pro/sitemap.xml
+
+## Recommended descriptions
+
+Short: Relay is the open-source AI development platform behind Archon, a multi-model AI coding agent and web IDE.
+
+Long: Relay helps developers build software from any device through Archon IDE, an open-source browser workspace with autonomous coding conversations, durable projects, source editing, terminals, Git tools, and hosted or local AI models.
+
+## Privacy boundary
+
+The Relay marketing website and public open-source repositories are intended for discovery. Authenticated Archon workspaces, user projects, conversations, account data, API keys, API responses, and private infrastructure are not public product documentation.
+
+## Status
+
+Relay and Archon are under active development. Treat visible and documented functionality as shipped. Treat roadmap items as planned until a public release confirms availability.
