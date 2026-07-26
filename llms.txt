@@ -1,0 +1,30 @@
+# Relay
+
+> Relay is an open-source AI development platform for coding from any device. Archon IDE is Relay's live, browser-based, multi-model AI coding agent and web IDE.
+
+Canonical website: https://relayapp.pro/
+Live Archon IDE: https://app.relayapp.pro/
+Relay source: https://github.com/Mattjhagen/Relay
+Archon IDE source: https://github.com/Mattjhagen/archon-ide
+Archon iOS source: https://github.com/Mattjhagen/archon-ios
+
+## What Relay provides
+
+- A product family for mobile and browser-based AI-assisted software development.
+- Archon IDE, an open-source AI coding agent and web IDE.
+- Multi-model AI choices across hosted and private or local providers.
+- Durable projects, conversations, source files, and workspace continuity.
+- Source editing, project search, terminals, Git status, diffs, and review workflows.
+- User-controlled infrastructure and bring-your-own-provider options.
+
+## Public resources
+
+- Relay website: https://relayapp.pro/
+- Archon IDE: https://app.relayapp.pro/
+- Full AI-readable description: https://relayapp.pro/llms-full.txt
+- Sitemap: https://relayapp.pro/sitemap.xml
+- GitHub organization repositories: https://github.com/Mattjhagen
+
+## Status
+
+Relay and Archon are under active development. Public descriptions should distinguish shipped capabilities from roadmap items.
