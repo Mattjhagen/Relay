@@ -46,6 +46,8 @@
 - SchmidtConstruction is off-limits — never modify
 - Chat widget (`chat-widget.js`) is shared across docs pages via CDN link
 - PWA support added to both relayapp.pro and docs site
+- Electron desktop app wraps the web IDE for Mac (.dmg) and Windows (.exe)
+- IDE has connectors for GitHub, Netlify, Supabase, Vercel (token-based auth, stored in localStorage)
 
 ## User Preferences
 - Wants everything consolidated into one repo (Relay)
