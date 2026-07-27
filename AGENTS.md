@@ -295,14 +295,26 @@ recent topic. Voice: sarcastic, sharp, no filter.
 
 ## 8b. Known-remaining Shaggoth issues (next session starts here)
 
-1. **Wikipedia cruft STILL leaks — stop blacklisting, change the strategy.** `_NOISE` has been
-   extended twice (incl. un-anchoring editorial-banner phrases, which were trapped inside a
-   `^\s*(...)` group and never matched mid-sentence). It is whack-a-mole: fresh scrapes keep
-   producing new banner wording ("It may include hallucinated information, copyright
-   violations..."). **Better fix: positively select definitional sentences** — prefer the first
-   sentence containing the entry's own topic words, or matching `^<Topic> (is|are|was|refers to)`,
-   instead of blacklisting junk. Blacklist should be the backstop, not the mechanism.
-   Backups: `engine.py.bak` … `.bak5`.
+1. ~~Wikipedia cruft leaks~~ **DONE — definitional selection built and verified.**
+   Blacklisting was replaced with positive selection. Five fixes, each found by testing:
+   a. `summarize_entry(content, topic)` now ranks sentences: definitional → mentions-topic →
+      article head. Supporting sentences must stay on subject.
+   b. `_is_definitional()` requires the topic to **lead** the sentence (appear before the defining
+      verb, within 12 words). Without this, "Data mining **is** a related field ... unsupervised
+      **learning**" qualified as a definition of *machine learning*.
+   c. `_stem_match()` (4-char prefix) so `aeroponic`↔`aeroponics`, `learn`↔`learning` match.
+   d. `_scrub()` **strips** citation markers instead of rejecting the sentence. Wikipedia cites its
+      lead definition most heavily, so the old filter discarded the best line in every article.
+   e. `_break_navboxes()` — **the decisive one.** Wikipedia's navigation sidebar is inlined as
+      running text with no punctuation, welding the lead onto it:
+      `"... NFT plagiarism scandal Glossary v t e Machine learning ( ML ) is a field of study ..."`
+      One >400-char blob → dropped by the length filter. `v t e` (view/talk/edit) now becomes a
+      sentence boundary.
+   Verified 5/5: machine learning, aeroponics, photosynthesis, DNA, gravity all return their real
+   definitions. Backups `engine.py.bak` … `.bak10`.
+   *Residual:* trailing disambiguation debris on some entries (gravity: "Escher) or Gravity, a 1952
+   mixed-media artwork by M."). `_is_list_debris()` catches album/song runs; extend for artwork and
+   "All pages with titles beginning with X".
 2. **Markov output is incoherent** when there is no knowledge hit. Markov cannot hold a thought.
    Options: train TinyGPT (`--model tinygpt --steps N`), or make knowledge-retrieval the primary
    path and use the model only for chit-chat.
@@ -330,6 +342,20 @@ recent topic. Voice: sarcastic, sharp, no filter.
   queue keyed by session, a hook on curiosity-episode completion, and a push/poll path to deliver
   the follow-up. Pairs with the "thought queue" item below.
 - **Long-form responses** between answers (not just one-liners).
+- **Drift toggle (`drift` / `no_drift`).** Humans can let it wander "for fun"; the IDE integration
+  must NOT drift. Make it a per-request flag + a settings default, threaded from `/chat` into
+  `DialogueEngine.respond()`. No-drift = knowledge/definitional answers only, Markov and tangents
+  disabled. Drift = allow associative replies and topic wandering.
+- **Self-awareness persona.** It should know it is an AI running on a computer (specifically: on
+  the r510, learning from scraped pages) — reflected in `patterns.py` / personality traits.
+- **PWA icon + polish.** User wants a *creepy Shaggoth* icon in the Archon house style (dark
+  rounded square, glowing centred emblem, purple/cyan). `static/generate-pwa-icons.py` exists;
+  regenerate `pwa-192.png` / `pwa-512.png` / `favicon.svg` and reference from `manifest.json`.
+- **Mobile-friendly dashboard**: anchors for the tab nav, everything visible, and the on-screen
+  keyboard must not cover the input (use `dvh`/`visualViewport`, not `vh`).
+- **UI error seen by user:** `Error: The string did not match the expected pattern.` — a Safari/iOS
+  regex or `JSON.parse` failure in `static/app.js`. Reproduce on mobile Safari; likely an
+  unsupported regex construct (lookbehind) in the frontend.
 - **Random thoughts + push notifications.** Shaggoth should surface unprompted thoughts through
   the day via PWA web-push to probe engagement (e.g. after a curiosity episode: "I just read about
   X, want to hear the weird part?"). Assets exist: `static/sw.js`, `manifest.json`, and the
