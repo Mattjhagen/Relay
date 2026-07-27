@@ -778,3 +778,89 @@ ssh matt@100.103.3.35 -t 'gh auth login --hostname github.com --git-protocol ssh
   clients; misleading when debugging headers.
 - The two `[failed]` rows in the Self-Learn log are historical, from before the
   Markov fallback existed. Not re-run.
+
+---
+
+# SESSION 2026-07-27 (~15:00–16:00 UTC) — "what isn't working" → fixed
+
+Shaggoth `9b243d8` (191 tests) · command center `bb12d59` (188 tests). Both clean.
+
+## S. The IDE was talking to the wrong machine — FIXED
+
+`SHAGGOTH_BASE_URL` was `http://100.67.199.109:8420` (**the MacBook**), which
+runs old code — asked "what is gravity" it answered `source: fallback`,
+*"That's interesting — go on."*, with no `mode` field. **Every fix since
+2026-07-27 03:00 was invisible to `ide.relayapp.pro` / `app.relayapp.pro`.**
+
+Verified both hosts reachable from inside the Fly machine first (no curl or
+python in that image — use bash `/dev/tcp`), then:
+
+```bash
+flyctl secrets set SHAGGOTH_BASE_URL=http://100.103.3.35:8420 -a archon-ide-pacmac
+```
+
+Rolling restart succeeded; both domains 200. **To revert:** set it back to
+`http://100.67.199.109:8420`.
+
+## T. The tty1 dashboard was running 12-hour-old code — FIXED
+
+`~/.bashrc` autostart ran a bare `command-center`, so any exit dropped tty1 to
+a bash prompt and stayed there until the next login. Now wrapped in a relaunch
+loop that restarts on crash but still lets **Q** exit to a shell.
+
+**Restarting the console from SSH:**
+
+```bash
+kill -HUP $(ps -o pid=,tty=,cmd= -t tty1 | awk '$3=="-bash"{print $1}')
+```
+
+- `getty@tty1` has `--autologin matt` and `Restart=always`, so the session
+  respawns and `.bashrc` starts the dashboard cleanly.
+- **Use `-HUP`, not the default TERM: an interactive bash ignores SIGTERM.**
+- ⚠️ **Never `pkill -f command_center` over SSH** — the pattern matches your own
+  ssh command line and kills the connection.
+
+## U. The ambient dialogue was choosing the syllabus — FIXED
+
+Once the scheduler worked, the command center's two narrators started driving
+it. They talk to `/chat` continuously, so every word they pulled out of a reply
+became a research topic: entries titled **"understanding", "continental",
+"geophysicists", "wavelengths"** — 14 of them in half an hour, and it would
+have run all night.
+
+`/chat` now accepts **`{"research": false}`**: answered normally, but not
+buffered as a curiosity clue and no auto-research. Only an explicit `false`
+opts out. The command center sets it. Junk entries removed.
+
+Also killed a dead condition in the same branch:
+`source in ("pattern","fallback") and source == "fallback"`.
+
+## V. Also fixed this round
+
+- **Memory tab was permanently empty.** `sessionId` was regenerated on every
+  page load, so `/history?session_id=` only ever returned the current load.
+  Persisted in `localStorage`, plus a "Start a new conversation" button.
+- **`what is an atom`** returned an image caption. The Atom lead is
+  *"An atom **consists of** a nucleus…"* and `_DEFINING_VERB` had no
+  compositional forms. Added consists of / comprises / is composed of /
+  is made up of. **The definitional sweep is now 8/8 clean.**
+- **Self-aware persona** in `patterns.py`: what it is, where it runs, how it
+  learns, and the "do you have feelings" question — in voice, every claim true
+  of this deployment.
+- **HEAD returned a 501 HTML page**, so `curl -I` reported `text/html` for
+  every asset. Served as GET with the body suppressed.
+
+## W. Still open (deliberately)
+
+1. **`ai.relayapp.pro` is public and unauthenticated.** Not changed: setting
+   `SHAGGOTH_API_KEY` would lock the user out of their own UI until they enter
+   the key, so it needs their decision. Setting it also switches on the rate
+   limiter (`_rate_limit` is a no-op without a key).
+2. **Never built:** push notifications, deferred/async answers, memory
+   compaction, thought queue.
+3. **Markov is incoherent** outside knowledge hits, so DRIFT mode is poor.
+   TinyGPT needs `pip install torch`. NO_DRIFT (the default) never calls it.
+4. **Reddit** stays unscrapeable — robots.txt is `Disallow: /`. Needs their
+   OAuth API with a registered app.
+5. **`gh` CLI unauthenticated** — interactive, user must run it. Git over SSH
+   works and is what all pushes use.
