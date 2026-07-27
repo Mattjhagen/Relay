@@ -424,3 +424,244 @@ cp <module>.py /tmp/cctest/command_center/ && cd /tmp/cctest && python3 -c "from
 - Storage meter must read so they know if more storage is needed
 - Health surface in `github.com/Mattjhagen/r510-command-center`
 - Keep this AGENTS.md current for context-loss recovery
+
+---
+
+# SESSION 2026-07-27 (03:00–05:30 UTC) — everything below verified by command
+
+**All work in this session is committed and pushed.** Nothing is left dirty.
+
+| Repo | Branch | HEAD |
+|---|---|---|
+| `~/Shaggoth-a1` | `claude/ai-model-guardrails-platform-o6b50g` | `b14f3ad` |
+| `~/r510-command-center` | `main` | `6100aa9` |
+
+Tests: Shaggoth **143 passing** (was 82/14-failing). Command center **185 passing** (was 125/7-failing).
+
+## A. The two UI errors were ONE server-side crash — not frontend bugs
+
+The handoff listed `Error: The string did not match the expected pattern.` as a
+mobile-Safari regex/lookbehind problem in `static/app.js`. **It was not.**
+
+`markov_is_usable()` referenced `_ARTIFACTS`, a regex constant that **was never
+defined**. Every message that reached Markov generation raised `NameError`
+inside the request handler; `BaseHTTPRequestHandler` then answered with its
+default **HTML** error page (or dropped the connection). Both reported errors
+are the same `JSON.parse` failure, worded differently by each browser:
+
+- Chrome: `Unexpected token '<', "<!DOCTYPE"... is not valid JSON`
+- Safari: `The string did not match the expected pattern.`
+
+**Do not go looking for a lookbehind in app.js. There isn't one.**
+
+Fixes: defined `_ARTIFACTS`; wrapped every route in `Handler._guard()` so an
+unhandled exception becomes a JSON 500 instead of an HTML page. The traceback
+still goes to the journal.
+
+### Two more latent bugs of the same class, found by AST-scanning for undefined names
+- `shaggoth/__main__.py` used `json.dumps` with **no `import json`** → the
+  `personality` CLI subcommand crashed.
+- `_NOISE` contained `\\s` / `\\b` / `\\(` inside **raw** strings (doubled by a
+  heredoc during an earlier edit — gotcha #9 in §8). In a raw string that is a
+  *literal backslash*, so the entire anchored lead-in group could only match a
+  sentence starting with a backslash. That is why "For other uses, see …" kept
+  leaking despite the filter existing.
+
+> **Worth repeating:** `grep -rn 'r"[^"]*\\\\' shaggoth/` finds this class of bug.
+
+## B. Drift toggle — BUILT (task 1, done first as instructed)
+
+`shaggoth/dialogue/engine.py`: `DRIFT` / `NO_DRIFT`, `normalize_mode()`,
+`DEFAULT_MODE = NO_DRIFT`. `Reply.mode` reports which mode ran.
+
+- **NO_DRIFT** (default): knowledge + patterns only. No Markov, no "want me to
+  tell you about it?" teaser, no topic callbacks. **This is what the IDE uses.**
+- **DRIFT**: also allows Markov generation, the teaser, and recall callbacks.
+
+Per request: `{"mode": "drift"|"no_drift"}` or `{"drift": true|false}`.
+Instance default: `DialogueEngine(mode=...)`. Config default:
+`config/settings.json` → `"dialogue_mode"`. An unrecognised mode falls back
+rather than raising.
+
+`markov_is_usable` also now rejects output starting with punctuation
+(mid-sentence fragments) and **rejects outright when the prompt has no content
+word** ("you", "hi", "ofjds") — there is nothing for the output to be *about*,
+so relevance cannot be established.
+
+## C. Guardrails were EMPTY on the live public endpoint
+
+`DEFAULT_CONFIG` shipped `input_rules: []` and `output_rules: []`, and
+`config/guardrails.json` on r510 matched. **ai.relayapp.pro was running with no
+credential blocking, no redaction, and no length cap.** Restored a baseline:
+`no-credentials`, `no-malware`, `redact-emails`, `redact-secrets`,
+`reply-length-cap`. Verified live. (`max_length` also emitted `limit + 2`
+characters.)
+
+**Still open for the user:** the endpoint remains **public and
+unauthenticated**. `SHAGGOTH_API_KEY` support exists and works — setting it
+turns on auth *and* the rate limiter (`_rate_limit` is a no-op without a key).
+
+## D. Fact storage was broken on every fresh database
+
+`facts` is keyed `(key, user_id)`, but two call sites upserted with
+`ON CONFLICT(key)`, which matches no constraint → `sqlite3.OperationalError`.
+The **live DB had 0 rows**. Consolidated into `MemoryStore.set_fact()`; the
+`remember` plugin now calls it instead of inlining the SQL. Verified live:
+name extraction, `remember X is Y`, `/facts`, and recall all work.
+
+## E. Answer quality — 13/14 definitional probes now return the real definition
+
+Each fix was found by testing the previous one:
+
+1. **Prefer a candidate that actually defines something.** `summarize_entry_scored()`
+   reports whether the opening sentence was definitional; `respond()` does a
+   first pass taking only definitional candidates. "DNA" the molecule and
+   "DNA²" the manga both legitimately match "dna" — **the seeded `Dna` entry is
+   the manga**; only the disambiguation gloss defines the molecule.
+2. **Exact-title boost** (`_EXACT_TITLE_BOOST = 10.0`). Title overlap alone could
+   not separate `Evolution` from `Evolution Sabrina Carpenter Album` — both
+   matched the one query word, so the shorter-article tie-break handed the
+   answer to the pop album. Same tie sent "quantum mechanics" →
+   `Interpretations Of Quantum Mechanics` and "chemistry" → `Bioorganic Chemistry`.
+3. **Disambiguation penalty is mild (0.75), deliberately.** Those pages carry the
+   best one-line glosses in the corpus. An aggressive penalty made answers worse.
+4. **Captions and infoboxes weld onto the lead** (same class as the navbox bug).
+   `_DEFINITION_RESTART` splits `"...watershed A river is a natural stream..."`.
+5. **Scope clauses**: `_SCOPE_PREFIX` so "In physics, gravity … is …" counts.
+6. **`_is_list_debris` extended**: catalogue entries, index furniture, and
+   **orphaned parentheticals** — the `"Escher) or Gravity, a 1952 …"` tail came
+   from `"M. C. Escher"` splitting on `"M."`.
+7. **Body-route relevance**: `knowledge_is_relevant(topic, text, content)` also
+   accepts when *every* content word appears in the body and there are ≥2 of
+   them. Titles alone could not reach a character discussed across six chapters.
+
+*Residual:* `"what is an atom"` still returns a mid-article sentence.
+
+## F. Reddit — the handoff's diagnosis was wrong
+
+`https://www.reddit.com/robots.txt` is:
+
+```
+User-agent: *
+Disallow: /
+```
+
+**Reddit forbids all crawling.** A descriptive User-Agent does not change it
+(verified: still 403), and `.rss` answers 200 but is covered by the same
+robots.txt. The supported route is Reddit's **OAuth API with a registered app**.
+`~/seed_sites.py` now has the Reddit block renamed `reddit_json_disabled` with
+this reasoning inline.
+
+The scraper **does** now honour robots.txt (`ScraperEngine.robots_allows()`,
+cached per origin for 1h, fails open on missing/unreachable, always honours a
+fetched `Disallow`, logs refusals). `USER_AGENT` is descriptive and contactable.
+
+## G. The book is ingested
+
+`~/seed_book.py` ingested `github.com/Mattjhagen/the-gentle-conquest`:
+**38 entries, 158,161 words** (prologue + 35 chapters + epilogue + README).
+KB is now **~360 entries**. Verified: "what is the gentle conquest",
+"tell me about the shepherd", "who is Ellie Finch" all answer from it.
+
+## H. Frontend / PWA
+
+- **`/greeting` is wired** (`loadGreeting()` in app.js). Fresh line every load.
+- **Icons**: `favicon.ico` did not exist → 404 on every page load. `favicon.svg`
+  is now the single source (creepy slit-pupil eye + tendrils, Archon dark
+  plate) and `generate-pwa-icons.py` rasterises it via **cairosvg** into
+  `favicon.ico` (16/32/48), `apple-touch-icon.png`, `pwa-192`, `pwa-512`, and
+  `pwa-512-maskable` (padded for Android's safe zone).
+  ⚠️ cairosvg does **not** resolve `<image xlink:href>` — it silently produced an
+  empty 1.8 KB plate. The maskable variant inlines the SVG into a `<g transform>`.
+- **Mobile**: `--app-h` tracks `visualViewport.height` (100vh does not change
+  when the keyboard opens, which is why the input went behind it); `dvh`/`vh`
+  fallbacks; `viewport-fit=cover` + safe-area padding; 16px inputs (or iOS
+  zooms on focus); 44px tap targets; scrollable drawer.
+- **Nav**: real `href="#view"` anchors + hashchange routing. Tab survives reload
+  and the back button.
+- **New UI**: thinking indicator, collapsible "how it got that" panel (source /
+  mode / rules / facts learned), drift selector in Settings.
+- `readJson()` reports *"the server returned an error page"* instead of
+  surfacing a raw `JSON.parse` error.
+
+## I. URL handling in /chat — BUILT
+
+A message containing an `http(s)` URL is scraped, ingested, and answered in the
+same turn. Stripping the link often leaves no subject ("what do you make of ?"),
+so `question_for_page()` substitutes "what is <title>" when the residual has no
+content word; a real question is left alone. `clean_page_title()` strips
+"- Wikipedia" / "| GitHub" suffixes before they become a knowledge topic.
+
+## J. r510-command-center — WIRED
+
+`command_center/shaggoth.py` is rendered now. Telemetry block grew to
+**13 lines** (`MIN_HEIGHT` 20 → 22):
+
+- `SHAGGOTH <STATE>` | `TOPICS n (+n)  EPISODES n (+n)`
+- `LEARNING <activity>` | `WORDS n (+n)`
+- a scrolling shell-style **ingestion ticker**
+
+`LearningCounter` baselines on the first healthy sample (offline samples are
+ignored, a shrinking KB re-baselines). `LearningFeed` recovers events by
+**diffing successive topic maps** — Shaggoth reports totals, not events — and
+the first sample only baselines, or the ticker would replay 360 old topics.
+
+**`[G]`** opens a full Shaggoth learning detail screen.
+
+**Aliens**: two narrators inside the animation grid (green on Earth, purple on
+the satellite, blue cameo, amber floor mess). **Both** are Shaggoth, held in
+**two separate `/chat` sessions** and pointed at each other
+(`command_center/conversation.py`) — every line on screen is its own words.
+Two sessions because `/chat` keeps per-session memory; one session makes it
+answer itself and collapse into a monologue. Seeded from the novel every
+restart. Falls back to telemetry commentary when Shaggoth is unreachable.
+
+⚠️ **Do not hand a reply to the other speaker verbatim.** It looks right and
+is not: the reply retrieves the same knowledge entry, so the two sides parrot
+one paragraph forever. Each speaker is prompted with a *subject* pulled from
+what the other said; only the prompt is derived.
+
+Drift quality took four passes (all tested): non-answers must not steer;
+sentence-initial capitals are not names; bibliographic words ("Novel",
+"Overview") are not names; clause openers are stripped; repeated answers do not
+re-queue; avoidance compares by containment.
+
+`fly.py` already used `find_flyctl_executable` — that handoff TODO was stale.
+
+## K. No-sudo restart (important)
+
+`shaggoth.service` is a **system** unit; `systemctl restart` needs a password.
+But `Restart=always` and the process runs as `matt`, so:
+
+```bash
+kill $(systemctl show shaggoth -p MainPID --value)
+for i in $(seq 1 25); do sleep 2; curl -sf -m 3 localhost:8420/health >/dev/null && break; done
+```
+
+systemd respawns it with the new code. **It takes ~10–20 s** (12 MB Markov model
++ 360 knowledge entries) — a 7 s sleep is not enough and will look like a crash.
+
+## L. Running the tests
+
+Neither box has pytest installed. `uv` is on r510 but **not on PATH**:
+
+```bash
+cd ~/Shaggoth-a1        && PYTHONPATH=. ~/.local/bin/uvx pytest tests/ -q
+cd ~/r510-command-center && ~/.local/bin/uvx pytest tests/ -q   # editable install, no PYTHONPATH needed
+```
+
+Shaggoth has **no `tests/__init__.py`**, hence `PYTHONPATH=.`.
+
+## M. Still open
+
+1. **Auth on the public endpoint** — decision needed from the user.
+2. **Deferred/async answers** + **PWA push notifications** (VAPID keys,
+   subscription storage, `sw.js` push handlers). Not started.
+3. **Self-aware persona** in `patterns.py` (knows it is an AI on the r510).
+4. **Memory compaction / thought queue.** Not started.
+5. **Curiosity tuning** — `ScheduleConfig(min_message_count=5, interval_minutes=60)`.
+   Still only 1 episode total.
+6. **`what is an atom`** returns a mid-article sentence.
+7. **Markov is still incoherent** outside knowledge hits. In NO_DRIFT it never
+   speaks, which is why the default is NO_DRIFT. TinyGPT needs `pip install torch`.
+8. **`ide.relayapp.pro` → Shaggoth** repoint — needs user confirmation first.
