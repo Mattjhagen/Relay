@@ -330,6 +330,13 @@ recent topic. Voice: sarcastic, sharp, no filter.
   queue keyed by session, a hook on curiosity-episode completion, and a push/poll path to deliver
   the follow-up. Pairs with the "thought queue" item below.
 - **Long-form responses** between answers (not just one-liners).
+- **Random thoughts + push notifications.** Shaggoth should surface unprompted thoughts through
+  the day via PWA web-push to probe engagement (e.g. after a curiosity episode: "I just read about
+  X, want to hear the weird part?"). Assets exist: `static/sw.js`, `manifest.json`, and the
+  `Shaggoth-a1` branch has a **push register endpoint** already. Needs: VAPID keys, subscription
+  storage, a scheduler for thought generation, and `sw.js` push/notificationclick handlers.
+  Now feasible because the site is on a real public origin (`ai.relayapp.pro`) — web push
+  requires HTTPS on a stable origin, which tailnet-only Serve could not provide.
 - **Live learning counter on the r510 tty command center** — knowledge-entry / episode count
   updating in real time so the AI is visibly learning. `command_center/shaggoth.py` already
   returns everything needed (`knowledge_entries`, `total_episodes`, `pages_stored`,
