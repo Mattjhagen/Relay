@@ -478,6 +478,27 @@ pub async fn list_providers() -> HttpResponse {
         configured: !opencode_url.is_empty() && !opencode_password.is_empty(),
     });
 
+    // Shaggoth — self-hosted AI, probed by health check
+    let shaggoth_url = std::env::var("SHAGGOTH_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8420".to_string());
+    let shaggoth_available = Client::new()
+        .get(format!("{}/health", shaggoth_url))
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+    providers.push(ProviderInfo {
+        id: "shaggoth".to_string(),
+        name: "Shaggoth (Local AI)".to_string(),
+        models: vec![ModelInfo {
+            id: "shaggoth-default".to_string(),
+            name: "Shaggoth".to_string(),
+        }],
+        requires_key: false,
+        configured: shaggoth_available,
+    });
+
     if mock_provider_enabled() {
         providers.push(ProviderInfo {
             id: "mock".to_string(),
@@ -490,6 +511,19 @@ pub async fn list_providers() -> HttpResponse {
             configured: true,
         });
     }
+
+    // Auto — smart routing across all configured providers
+    let auto_configured = providers.iter().any(|p| p.configured);
+    providers.insert(0, ProviderInfo {
+        id: "auto".to_string(),
+        name: "Auto".to_string(),
+        models: vec![ModelInfo {
+            id: "auto".to_string(),
+            name: "Best Available".to_string(),
+        }],
+        requires_key: false,
+        configured: auto_configured,
+    });
 
     HttpResponse::Ok().json(providers)
 }
@@ -536,6 +570,8 @@ pub async fn chat(body: web::Json<ChatReq>) -> HttpResponse {
         }
         "ollama" => chat_ollama(&body.messages, model, max_tokens, temperature, effort).await,
         "opencode_local" => chat_opencode(&body.messages, model, effort).await,
+        "shaggoth" => chat_shaggoth(&body.messages, effort).await,
+        "auto" => chat_auto(&body.messages, max_tokens, body.api_key.as_deref(), effort).await,
         "mock" if mock_provider_enabled() => chat_mock(&body.messages, model, effort).await,
         "mock" => HttpResponse::ServiceUnavailable()
             .json(serde_json::json!({"error": "The demo provider is disabled."})),
@@ -1096,6 +1132,178 @@ async fn chat_mock(messages: &[ChatMessage], model: &str, effort: ReasoningEffor
     let output_tokens = response.len() / 4;
 
     chat_response(response, model, "mock", input_tokens, output_tokens, effort)
+}
+
+// Shaggoth is a self-hosted Python AI served at SHAGGOTH_BASE_URL (default http://localhost:8420).
+// Start it with: python3 -m shaggoth serve --port 8420
+// Expected API: POST /api/chat  {"message":"...", "session_id":"archon-ide"}
+//               → {"response":"...", "session_id":"..."}
+async fn chat_shaggoth(messages: &[ChatMessage], effort: ReasoningEffort) -> HttpResponse {
+    let base_url = std::env::var("SHAGGOTH_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8420".to_string());
+    let base_url = base_url.trim_end_matches('/');
+
+    // Extract the last user message as the prompt; include prior turns as context prefix
+    let last_user_index = messages.iter().rposition(|m| m.role == "user");
+    let prompt = last_user_index
+        .and_then(|i| messages.get(i))
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+
+    // Prepend conversation history so Shaggoth has context
+    let history = messages
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != last_user_index && messages[*i].role != "system")
+        .map(|(_, m)| format!("{}: {}", m.role, m.content))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let full_prompt = if history.is_empty() { prompt } else { format!("{history}\n\nuser: {prompt}") };
+
+    let client = match Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(120))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return HttpResponse::InternalServerError()
+            .json(serde_json::json!({"error": e.to_string()})),
+    };
+
+    let resp = client
+        .post(format!("{base_url}/api/chat"))
+        .json(&serde_json::json!({
+            "message": full_prompt,
+            "session_id": "archon-ide"
+        }))
+        .send()
+        .await;
+
+    match resp {
+        Ok(r) => match r.json::<serde_json::Value>().await {
+            Ok(val) => {
+                if let Some(err) = val.get("error").and_then(|e| e.as_str()) {
+                    return HttpResponse::BadGateway()
+                        .json(serde_json::json!({"error": err}));
+                }
+                let content = val["response"]
+                    .as_str()
+                    .unwrap_or("(empty response from Shaggoth)")
+                    .to_string();
+                let input_tokens = full_prompt.len() / 4;
+                let output_tokens = content.len() / 4;
+                chat_response(content, "shaggoth-default", "shaggoth", input_tokens, output_tokens, effort)
+            }
+            Err(e) => HttpResponse::BadGateway()
+                .json(serde_json::json!({"error": format!("Shaggoth returned unparsable response: {e}")})),
+        },
+        Err(_) => HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "Shaggoth server is offline. Start it with: python3 -m shaggoth serve --port 8420"
+        })),
+    }
+}
+
+// Auto mode — picks the best available provider based on what is configured and message complexity.
+// Priority order: Anthropic → OpenAI → Gemini → Ollama → Shaggoth
+// Falls back down the list on credit/quota errors automatically.
+async fn chat_auto(
+    messages: &[ChatMessage],
+    max_tokens: u32,
+    api_key: Option<&str>,
+    effort: ReasoningEffort,
+) -> HttpResponse {
+    let msg_len: usize = messages.iter().map(|m| m.content.len()).sum();
+
+    // Build a priority list of (provider, model) pairs based on what's configured.
+    // For short messages prefer fast/cheap models; for long prefer high-capacity ones.
+    let mut candidates: Vec<(&str, &str)> = Vec::new();
+
+    let anthropic_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
+    if !anthropic_key.is_empty() {
+        let model = if msg_len > 8000 { "claude-sonnet-5" } else { "claude-haiku-4-5" };
+        candidates.push(("anthropic", model));
+    }
+
+    let openai_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+    if !openai_key.is_empty() {
+        let model = if msg_len > 8000 { "gpt-5.6-sol" } else { "gpt-5.6-terra" };
+        candidates.push(("openai", model));
+    }
+
+    let gemini_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+    if !gemini_key.is_empty() {
+        candidates.push(("gemini", "gemini-3.6-flash"));
+    }
+
+    // Check Ollama availability
+    let ollama_url = std::env::var("OLLAMA_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let ollama_ok = Client::new()
+        .get(format!("{ollama_url}/api/tags"))
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+    if ollama_ok {
+        candidates.push(("ollama", "llama3.2"));
+    }
+
+    // Shaggoth last — always free, always local
+    let shaggoth_url = std::env::var("SHAGGOTH_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8420".to_string());
+    let shaggoth_ok = Client::new()
+        .get(format!("{shaggoth_url}/health"))
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+    if shaggoth_ok {
+        candidates.push(("shaggoth", "shaggoth-default"));
+    }
+
+    if candidates.is_empty() {
+        return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "error": "No AI providers are configured. Add an API key in Settings, start Ollama, or run Shaggoth locally."
+        }));
+    }
+
+    let temperature = 0.7;
+    for (provider, model) in &candidates {
+        let response = match *provider {
+            "anthropic" => {
+                chat_anthropic(messages, model, max_tokens, temperature, api_key, effort).await
+            }
+            "openai" => chat_openai(messages, model, max_tokens, api_key, effort).await,
+            "gemini" => {
+                chat_gemini(messages, model, max_tokens, temperature, api_key, effort).await
+            }
+            "ollama" => chat_ollama(messages, model, max_tokens, temperature, effort).await,
+            "shaggoth" => chat_shaggoth(messages, effort).await,
+            _ => continue,
+        };
+
+        let status = response.status();
+        if status.is_success() {
+            return response;
+        }
+
+        // On credit/quota error, try next candidate
+        let bytes = to_bytes(response.into_body()).await.unwrap_or_default();
+        let payload = serde_json::from_slice::<serde_json::Value>(&bytes)
+            .unwrap_or_else(|_| serde_json::json!({}));
+        let error_msg = provider_error_message(&payload);
+        if !is_credit_limit_message(&error_msg) {
+            // Non-quota error from a configured provider — report it rather than silently skipping
+            return HttpResponse::BadGateway().json(payload);
+        }
+        // Credit exhausted on this provider — fall through to next
+    }
+
+    HttpResponse::ServiceUnavailable().json(serde_json::json!({
+        "error": "All configured providers have exhausted their credits. Add another API key or start Shaggoth locally."
+    }))
 }
 
 #[derive(Deserialize)]

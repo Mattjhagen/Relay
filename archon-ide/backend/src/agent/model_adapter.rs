@@ -52,6 +52,8 @@ pub async fn call_model(
         "openai" => call_openai(messages, model, api_key, effort, max_tokens).await,
         "gemini" => call_gemini(messages, model, api_key, max_tokens).await,
         "ollama" => call_ollama(messages, model, max_tokens).await,
+        "shaggoth" => call_shaggoth(messages).await,
+        "auto" => call_auto(messages, api_key, effort, max_tokens).await,
         "mock" => Ok(call_mock(messages)),
         _ => Err(AdapterError(format!("unknown provider: {provider}"))),
     }
@@ -343,6 +345,105 @@ async fn call_ollama(
         input_tokens: val["prompt_eval_count"].as_u64().unwrap_or(0) as usize,
         output_tokens: val["eval_count"].as_u64().unwrap_or(0) as usize,
     })
+}
+
+// ── Shaggoth ──────────────────────────────────────────────────────────────────
+// Self-hosted Python AI. Start with: python3 -m shaggoth serve --port 8420
+// Set SHAGGOTH_BASE_URL env var to override the default localhost address.
+
+async fn call_shaggoth(messages: &[AdapterMessage]) -> Result<AdapterResponse, AdapterError> {
+    let base_url = std::env::var("SHAGGOTH_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8420".to_string());
+    let base_url = base_url.trim_end_matches('/');
+
+    let last_user_index = messages.iter().rposition(|m| m.role == "user");
+    let prompt = last_user_index
+        .and_then(|i| messages.get(i))
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+
+    let history = messages
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != last_user_index && messages[*i].role != "system")
+        .map(|(_, m)| format!("{}: {}", m.role, m.content))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let full_prompt = if history.is_empty() {
+        prompt.clone()
+    } else {
+        format!("{history}\n\nuser: {prompt}")
+    };
+
+    let resp = Client::new()
+        .post(format!("{base_url}/api/chat"))
+        .json(&serde_json::json!({
+            "message": full_prompt,
+            "session_id": "archon-agent"
+        }))
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await
+        .map_err(|e| AdapterError(format!("Shaggoth unreachable: {e}")))?;
+
+    let val: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AdapterError(format!("Shaggoth bad response: {e}")))?;
+
+    if let Some(err) = val.get("error").and_then(|e| e.as_str()) {
+        return Err(AdapterError(err.to_string()));
+    }
+
+    let content = val["response"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let input_tokens = full_prompt.len() / 4;
+    let output_tokens = content.len() / 4;
+
+    Ok(AdapterResponse { content, input_tokens, output_tokens })
+}
+
+// ── Auto ──────────────────────────────────────────────────────────────────────
+// Tries providers in priority order: Anthropic → OpenAI → Gemini → Ollama → Shaggoth
+
+async fn call_auto(
+    messages: &[AdapterMessage],
+    api_key: Option<&str>,
+    effort: ReasoningEffort,
+    max_tokens: u32,
+) -> Result<AdapterResponse, AdapterError> {
+    let mut tried: Vec<String> = Vec::new();
+
+    if let Some(k) = resolve_key(api_key, "ANTHROPIC_API_KEY") {
+        let r = call_anthropic(messages, "claude-haiku-4-5", Some(&k), max_tokens).await;
+        if r.is_ok() { return r; }
+        tried.push("anthropic".to_string());
+    }
+
+    if let Some(k) = resolve_key(api_key, "OPENAI_API_KEY") {
+        let r = call_openai(messages, "gpt-5.6-terra", Some(&k), effort, max_tokens).await;
+        if r.is_ok() { return r; }
+        tried.push("openai".to_string());
+    }
+
+    if let Some(k) = resolve_key(None, "GEMINI_API_KEY") {
+        let r = call_gemini(messages, "gemini-3.6-flash", Some(&k), max_tokens).await;
+        if r.is_ok() { return r; }
+        tried.push("gemini".to_string());
+    }
+
+    let ollama_r = call_ollama(messages, "llama3.2", max_tokens).await;
+    if ollama_r.is_ok() { return ollama_r; }
+
+    let shaggoth_r = call_shaggoth(messages).await;
+    if shaggoth_r.is_ok() { return shaggoth_r; }
+
+    let tried_str = if tried.is_empty() { "none".to_string() } else { tried.join(", ") };
+    Err(AdapterError(format!(
+        "No AI provider available (tried: {tried_str}). Configure an API key or start Shaggoth locally."
+    )))
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

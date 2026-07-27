@@ -141,6 +141,6 @@ export interface TerminalSession {
 }
 
 // Provider adapter types
-export type ProviderId = 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'mock';
+export type ProviderId = 'auto' | 'shaggoth' | 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'mock';
 export type ModelId = string;
 export type ReasoningEffort = 'low' | 'medium' | 'high';

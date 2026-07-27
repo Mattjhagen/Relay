@@ -53,8 +53,8 @@ export interface LocalSnapshot {
 
 export const defaultPreferences: AppPreferences = {
   appearance: 'obsidian',
-  selectedProvider: 'openai',
-  selectedModel: 'gpt-5.6-terra',
+  selectedProvider: 'auto',
+  selectedModel: 'auto',
   reasoningEffort: 'medium',
   failoverEnabled: true,
   sidebarWidth: 260,
