@@ -293,6 +293,19 @@ in-character "don't know yet" lines naming the subject; `compose_greeting()` + n
 recent topic. Voice: sarcastic, sharp, no filter.
 ⚠️ `KnowledgeBase` has **no `entries()` method** — use `maybe_reload()` then `._entries`.
 
+## 4i. Shaggoth engine work COMMITTED
+
+Commit **`62f339d`** on branch `claude/ai-model-guardrails-platform-o6b50g` in
+`Mattjhagen/Shaggoth-a1` — pushed, working tree clean. Covers the BM25 ranking fix, relevance
+gating, the curiosity-deadlock fix, definitional selection, and the greeting/persona work.
+
+- 11 `.bak` files moved out of the repo to `~/stash/engine-backups/`
+- `.gitignore` extended for generated artifacts (`data/knowledge/`, the corpus, curiosity history,
+  freshness/learning JSON). **Regenerate with** `~/seed_knowledge.py` then
+  `python3 -m shaggoth train --corpus data/corpus/knowledge_corpus.txt --model markov`
+- The trained `markov_model.json` (12 MB) was already gitignored — it is **not** in the repo, so a
+  fresh clone must retrain before `/chat` will return `source: model`.
+
 ## 8b. Known-remaining Shaggoth issues (next session starts here)
 
 1. ~~Wikipedia cruft leaks~~ **DONE — definitional selection built and verified.**
