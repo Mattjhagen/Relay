@@ -267,16 +267,52 @@ list is therefore weighted to crawl-permissive sources (Wikimedia, Gutenberg, US
 open-access science) and uses RSS for news rather than crawling article pages. **Add robots.txt
 support before broadening to arbitrary sites.**
 
+## 4h. PUBLIC URL LIVE + self-learning loop verified
+
+**`https://ai.relayapp.pro`** — public, valid cert, serving Shaggoth. Also
+`https://shaggoth.relayapp.pro` (same tunnel).
+
+- Tunnel `shaggoth` id `54251949-a47b-4a0e-a998-0b32d743a8b2`
+- Config `~/.cloudflared/shaggoth-config.yml` → ingress to `127.0.0.1:8420`
+- Service `~/.config/systemd/user/cloudflared-shaggoth.service` (enabled, Linger=yes → 24/7)
+- `cloudflared` is at `~/.local/bin/cloudflared`, **not on PATH**
+
+**Self-learning loop verified end-to-end:**
+1. "what is aeroponic farming" → `source: fallback` (in character)
+2. Curiosity auto-researched → episode `curiosity-61f07b79`, 3 queries, 2 pages, **3,253 words**
+3. Same question again → `source: knowledge`. KB grew 305 → 307.
+
+`total_episodes` went 0 → 1. **The blocker was the Markov gate**: leaked garbage was returned as
+`source="model"`, and `server.py:222` only researches on `source == "fallback"`. Tightening the
+gate (digit-density, min-length, and requiring ≥1 shared content word with the question) is what
+made curiosity actually fire.
+
+**Persona/voice added** (`dialogue/engine.py`): `describe_unknown()` now returns varied,
+in-character "don't know yet" lines naming the subject; `compose_greeting()` + new
+**`GET /greeting`** endpoint returns a fresh opening each load, citing knowledge count / most
+recent topic. Voice: sarcastic, sharp, no filter.
+⚠️ `KnowledgeBase` has **no `entries()` method** — use `maybe_reload()` then `._entries`.
+
 ## 8b. Known-remaining Shaggoth issues (next session starts here)
 
-1. **Wikipedia cruft leaks into answers.** `_NOISE` in `dialogue/engine.py` still lets through
-   `"For the journal, see X (journal)."`, `"Look up X in Wiktionary"`, `"(disambiguation)"`,
-   `"redirects here"`, and album/band disambiguation lists. Strengthen the filter and prefer the
-   first *definitional* sentence.
+1. **Wikipedia cruft STILL leaks — stop blacklisting, change the strategy.** `_NOISE` has been
+   extended twice (incl. un-anchoring editorial-banner phrases, which were trapped inside a
+   `^\s*(...)` group and never matched mid-sentence). It is whack-a-mole: fresh scrapes keep
+   producing new banner wording ("It may include hallucinated information, copyright
+   violations..."). **Better fix: positively select definitional sentences** — prefer the first
+   sentence containing the entry's own topic words, or matching `^<Topic> (is|are|was|refers to)`,
+   instead of blacklisting junk. Blacklist should be the backstop, not the mechanism.
+   Backups: `engine.py.bak` … `.bak5`.
 2. **Markov output is incoherent** when there is no knowledge hit. Markov cannot hold a thought.
    Options: train TinyGPT (`--model tinygpt --steps N`), or make knowledge-retrieval the primary
    path and use the model only for chit-chat.
-3. **Greeting is canned + identical every open.** User wants a varied opening thought.
+3. ~~Greeting canned~~ **DONE** — see §4h (`/greeting` endpoint). **`static/index.html` still
+   hardcodes the old line at ~line 63** — the frontend must be wired to fetch `/greeting` on load.
+3b. **URLs are not understood.** User wants to paste a link and ask about it. `POST /scrape/url`
+   exists and works, but `/chat` does not detect a URL in the message. Add: regex a URL out of the
+   user's turn → `scraper.scrape(url)` → ingest → answer from that content in the same turn.
+3c. **Reddit returns 403 Blocked.** The scraper sends a default User-Agent. Reddit's public JSON
+   API requires a descriptive custom UA. Set one in `scraper/engine.py`.
 4. **No thinking UI.** User wants a collapsible "thinking" dropdown + loading animation while
    processing, like mainstream assistants.
 5. **No memory compaction.** User wants long-context memory with compaction.
@@ -286,6 +322,25 @@ support before broadening to arbitrary sites.**
    lower the threshold and interval, and/or seed the topic queue directly.
 8. **Only Wikipedia is scraped.** User wants news + social (Reddit JSON API).
 9. **Answer quality is retrieval-only** — no synthesis across multiple entries.
+
+## 8d. Newest user requests (not yet built)
+
+- **Deferred/async answers.** Let Shaggoth take time to think and **come back later with the
+  answer once curiosity has learned it**, rather than only answering in-turn. Needs: pending-question
+  queue keyed by session, a hook on curiosity-episode completion, and a push/poll path to deliver
+  the follow-up. Pairs with the "thought queue" item below.
+- **Long-form responses** between answers (not just one-liners).
+- **Live learning counter on the r510 tty command center** — knowledge-entry / episode count
+  updating in real time so the AI is visibly learning. `command_center/shaggoth.py` already
+  returns everything needed (`knowledge_entries`, `total_episodes`, `pages_stored`,
+  `total_words`); it just needs rendering in `app.py`/`rendering.py`.
+- **Thinking dropdown + loading animation** in the chat window, like mainstream assistants.
+- **Memory + memory compaction** for long context windows.
+- **`ide.relayapp.pro` → repoint to Shaggoth.** User said they no longer use the IDE at that
+  domain. Currently a Fly CNAME with an issued Fly cert. Repointing means
+  `cloudflared tunnel route dns shaggoth ide.relayapp.pro --overwrite-dns` and adding the hostname
+  to the tunnel ingress. **The Archon IDE would then only be at `app.relayapp.pro` /
+  `archon-ide-pacmac.fly.dev`.** Confirm before destroying a working deployment.
 
 ## 8c. r510-command-center work (repo cloned to `/tmp/r510cc`)
 
