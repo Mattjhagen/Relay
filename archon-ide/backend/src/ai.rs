@@ -1170,14 +1170,17 @@ async fn chat_shaggoth(messages: &[ChatMessage], effort: ReasoningEffort) -> Htt
             .json(serde_json::json!({"error": e.to_string()})),
     };
 
-    let resp = client
-        .post(format!("{base_url}/api/chat"))
+    let api_key = std::env::var("SHAGGOTH_API_KEY").unwrap_or_default();
+    let mut req = client
+        .post(format!("{base_url}/chat"))
         .json(&serde_json::json!({
             "message": full_prompt,
             "session_id": "archon-ide"
-        }))
-        .send()
-        .await;
+        }));
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {api_key}"));
+    }
+    let resp = req.send().await;
 
     match resp {
         Ok(r) => match r.json::<serde_json::Value>().await {
@@ -1186,7 +1189,7 @@ async fn chat_shaggoth(messages: &[ChatMessage], effort: ReasoningEffort) -> Htt
                     return HttpResponse::BadGateway()
                         .json(serde_json::json!({"error": err}));
                 }
-                let content = val["response"]
+                let content = val["reply"]
                     .as_str()
                     .unwrap_or("(empty response from Shaggoth)")
                     .to_string();

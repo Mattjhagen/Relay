@@ -375,13 +375,19 @@ async fn call_shaggoth(messages: &[AdapterMessage]) -> Result<AdapterResponse, A
         format!("{history}\n\nuser: {prompt}")
     };
 
-    let resp = Client::new()
-        .post(format!("{base_url}/api/chat"))
+    let api_key = std::env::var("SHAGGOTH_API_KEY").unwrap_or_default();
+    let client = Client::new();
+    let mut req = client
+        .post(format!("{base_url}/chat"))
         .json(&serde_json::json!({
             "message": full_prompt,
             "session_id": "archon-agent"
         }))
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_secs(120));
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {api_key}"));
+    }
+    let resp = req
         .send()
         .await
         .map_err(|e| AdapterError(format!("Shaggoth unreachable: {e}")))?;
@@ -395,7 +401,7 @@ async fn call_shaggoth(messages: &[AdapterMessage]) -> Result<AdapterResponse, A
         return Err(AdapterError(err.to_string()));
     }
 
-    let content = val["response"]
+    let content = val["reply"]
         .as_str()
         .unwrap_or("")
         .to_string();
