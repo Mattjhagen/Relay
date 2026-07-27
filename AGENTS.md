@@ -665,3 +665,116 @@ Shaggoth has **no `tests/__init__.py`**, hence `PYTHONPATH=.`.
 7. **Markov is still incoherent** outside knowledge hits. In NO_DRIFT it never
    speaks, which is why the default is NO_DRIFT. TinyGPT needs `pip install torch`.
 8. **`ide.relayapp.pro` → Shaggoth** repoint — needs user confirmation first.
+
+---
+
+# SESSION 2026-07-27 (later, ~14:30–15:30 UTC) — "dashboard says STALLED"
+
+Shaggoth HEAD `b5adb06`. Command center HEAD `31ef420`. Shaggoth tests **168**.
+
+## N. The STALLED report was correct — the scheduler had NEVER worked
+
+`command_center` showed `SHAGGOTH STALLED — no research in 11h` with the thread
+alive and 7 clues buffered. That is exactly the failure mode the STALLED state
+was added to catch, and it was telling the truth.
+
+`CuriosityScheduler._cycle()` drained the buffer **before** testing it:
+
+```python
+messages = list(self._message_buffer)
+self._message_buffer.clear()          # unconditional
+if len(messages) < min_message_count: # 5
+    return
+```
+
+Every cycle threw away whatever had accumulated. Unless 5+ messages landed
+inside a single 60-minute window, the count restarted at zero **forever**. The
+scheduler had never researched anything; the one episode on record came from
+the `/chat` fallback path in `server.py`.
+
+Fixed: peek, and spend only the messages actually analysed (so anything
+arriving mid-cycle survives). Two more in the same loop:
+- `config.enabled` was read nowhere — disabling a live scheduler did nothing.
+- An exception killed the thread. A dead thread looks identical to an idle one
+  from outside, so the daemon would answer requests forever while silently
+  never learning again. Cycles are guarded and logged now.
+
+**Defaults retuned**: `interval_minutes` 60 → **15**, `min_message_count` 5 → **2**.
+
+**Idle cycles now refresh stale knowledge** (`refresh_stale_when_idle=True`).
+"Always learning" cannot depend on someone being in the chat window. There were
+**114 stale topics** queued.
+
+**Verified unattended**: the timer fired on its own after 870 s — episodes
+2 → 3, entries 362 → 365, 4,774 words on a stale topic. Dashboard went
+STALLED → **ONLINE**.
+
+## O. Knowledge slugs — the filename stem IS the topic
+
+`_scan()` derives the topic from `fpath.stem`, so a malformed slug is a
+permanently malformed topic. A leading hyphen survived `.strip()` → the entry
+`" Algebra"`; `"Aeroponics - Wikipedia"` → `aeroponics---wikipedia` → came back
+as `"Aeroponics   Wikipedia"`. Both broke title matching in retrieval.
+
+Consolidated into `KnowledgeBase.slug_for()`. The two affected files on disk
+were repaired; `-algebra.md` turned out to be a smaller duplicate of the real
+`algebra.md` and was deleted. **362 entries, 0 duplicates, 0 malformed.**
+
+## P. THREE separate reasons a deploy could not reach a browser
+
+Chasing "`ai.relayapp.pro/#/learn` opens the chat view" turned up a stack of
+caching problems. All fixed; this is the one to remember.
+
+1. **Router only accepted `#learn`.** `#/learn` (the router-style form people
+   actually type and share) fell through to chat. Now tolerates `#learn`,
+   `#/learn`, `#/learn/`, and mixed case.
+
+2. **Cloudflare serves `/app.js` with `max-age=14400`** regardless of the
+   `no-cache` this origin sends. For four hours after every deploy, visitors
+   kept running the previous JavaScript — including anyone reporting a bug that
+   was already fixed. `index.html` now gets `?v=<mtime>` appended to its local
+   `.js`/`.css` refs as it is served (`add_cache_busters` in `server.py`),
+   derived from mtime so it cannot be forgotten on a deploy.
+
+3. **⚠️ The big one: the service worker pinned users to their first load.**
+   `sw.js` was cache-first over every same-origin request, with a cache name
+   that never changed and no cleanup on `activate`. Anyone who had loaded the
+   site once was stuck on that copy of `index.html`/`app.js` **permanently** —
+   no deploy could ever reach them. It also cached **API responses**, because
+   Shaggoth's API is at the root (`/chat`, `/curiosity/status`, `/knowledge`)
+   rather than under the `/api/` prefix the worker checked, so the dashboard
+   could show a stale knowledge count while the daemon was healthy.
+
+   Rewritten (`CACHE_VERSION = 'v2'`): network-first for navigations and API,
+   cache-first only for `?v=`-versioned assets, stale-while-revalidate for the
+   rest, versioned cache name, old caches deleted on activate. `app.js` calls
+   `registration.update()` on load and reloads once on `controllerchange`.
+
+> **When a frontend change "doesn't take", suspect the service worker first.**
+> To clear by hand in devtools console:
+> ```js
+> (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister());
+> (await caches.keys()).forEach(n => caches.delete(n));
+> ```
+
+Verified live: `#chat`, `#/learn`, `#/guardrails/`, `#Memory` all resolve;
+unknown fragments fall back to chat.
+
+## Q. gh CLI still unauthenticated (unchanged)
+
+`gh auth status` → *"The token in /home/matt/.config/gh/hosts.yml is invalid."*
+**Git over SSH works fine** (`ssh -T git@github.com` succeeds) and is what every
+push uses, so `gh` is only needed for PR/issue commands. Re-auth is interactive
+and must be run by the user:
+
+```bash
+ssh matt@100.103.3.35 -t 'gh auth login --hostname github.com --git-protocol ssh --web'
+```
+
+## R. Minor, noted but not fixed
+
+- `HEAD` requests return a 501 HTML page (`do_HEAD` is not implemented), so
+  `curl -I` reports `Content-Type: text/html` for any asset. Harmless for GET
+  clients; misleading when debugging headers.
+- The two `[failed]` rows in the Self-Learn log are historical, from before the
+  Markov fallback existed. Not re-run.
