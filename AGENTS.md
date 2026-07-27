@@ -86,37 +86,47 @@ Not broken — never triggered. Tune in `shaggoth/curiosity/scheduler.py`.
 
 ---
 
-## 4. IN FLIGHT — finish these first
+## 4. COMPLETED this session ✅
 
-### 4a. Knowledge seeding (running in background)
+### 4a. Knowledge seeding — DONE
+`~/seed_knowledge.py` ingested **104 Wikipedia topics → 692,622 words → 305 knowledge entries**,
+0 failures. Corpus at `data/knowledge/*.md` (4.4 MB). Log: `~/seed_knowledge.log`.
+
+### 4b. Markov model trained — DONE
 ```bash
-ssh matt@100.103.3.35 'tail -3 ~/seed_knowledge.log; grep -c OK ~/seed_knowledge.log'
+cat data/knowledge/*.md > data/corpus/knowledge_corpus.txt   # 674k words
+python3 -m shaggoth train --corpus data/corpus/knowledge_corpus.txt --model markov
+# → 4,095,782 chars, 322,094 contexts → data/markov_model.json (12 MB)
 ```
-Script: `~/seed_knowledge.py` — 104 foundational Wikipedia topics (science, math, computing,
-history, geography, society, health, engineering). ~7k words each, ~700k total.
-Last seen **54/104, 0 failures**, KB 2.4 MB.
+**Before this, `data/markov_model.json` did not exist** — which is why `/chat` only ever
+returned `source: "pattern"` (canned lines). Training is what unlocked `source: "model"`.
 
-### 4b. Directory consolidation (DO ONLY AFTER 4a COMPLETES)
-Seeding writes to `~/shaggotha1/data` — moving mid-write loses it.
+### 4c. Directory consolidation — DONE
+- `~/stash/Shaggoth-a1.main-2026-07-27` ← old `main` branch (no curiosity)
+- `~/Shaggoth-a1` ← **canonical**, curiosity branch + trained model + 305 entries
+- `~/shaggotha1` → symlink to `~/Shaggoth-a1`
 
-```bash
-# 1. confirm seeding done ("DONE:" line present)
-ssh matt@100.103.3.35 'tail -1 ~/seed_knowledge.log'
+`shaggoth.service` now runs the correct code, bound to **`0.0.0.0:8420`** (so Fly can reach it
+directly at `100.103.3.35:8420`), `Restart=always`, reboot-safe. **No sudo was needed.**
 
-# 2. consolidate  (no sudo needed)
-mkdir -p ~/stash
-mv ~/Shaggoth-a1 ~/stash/Shaggoth-a1.main-2026-07-27
-mv ~/shaggotha1 ~/Shaggoth-a1
-ln -s ~/Shaggoth-a1 ~/shaggotha1        # old path keeps working
+### 4d. Two engine bugs fixed (backups: `*.py.bak` beside each file)
 
-# 3. hand the port to systemd (Restart=always grabs it within ~5s)
-pkill -f "python3 -m shaggoth serve"
-sleep 8
-systemctl status shaggoth --no-pager | head -5
-curl -s https://r510-1.tail3f2448.ts.net/health
-```
-**Why this matters:** `shaggoth.service` already points at `~/Shaggoth-a1`, so this makes the
-service run the *correct* code and fixes reboot safety **without sudo**.
+**`shaggoth/dialogue/engine.py`** — knowledge-first answering.
+`patterns.respond()` ran *before* knowledge, so canned lines won. Knowledge was only injected as
+a *prompt* to the Markov model, which cannot follow a prompt → word salad. A hardcoded quirk
+appended *"I just read something about X — want me to tell you about it?"*, so it **offered**
+answers instead of giving them (the "never completes a thought" symptom).
+Added `_looks_like_question()`, `_clean_sentences()`, `summarize_entry()` and a knowledge-first
+branch returning `source="knowledge"`; teaser suppressed when it already answered.
+
+**`shaggoth/knowledge/engine.py`** — BM25 ranking.
+Old `query()` summed IDF once per distinct term, with **no term frequency, no length
+normalization**, and tie-broke on `-word_count` (**preferring the longest doc**). Result:
+"what is machine learning?" → a Swedish rock band. Replaced with Okapi BM25 (k1=1.5, b=0.75)
+plus an 8.0 title-match boost, scores normalized 0..1, tie-break toward *shorter* articles.
+
+Verified after fix: machine learning→Machine Learning, photosynthesis→Photosynthesis,
+quantum mechanics→Quantum mechanics, DNA→DNA. All `source: knowledge`.
 
 ---
 
@@ -209,6 +219,51 @@ Shaggoth data 2.4 MB and growing slowly. Expanding the LVM into free space **req
 10. `r510` (100.105.154.91) is **offline**; the live box is **`r510-1` (100.103.3.35)**.
 
 ---
+
+## 8b. Known-remaining Shaggoth issues (next session starts here)
+
+1. **Wikipedia cruft leaks into answers.** `_NOISE` in `dialogue/engine.py` still lets through
+   `"For the journal, see X (journal)."`, `"Look up X in Wiktionary"`, `"(disambiguation)"`,
+   `"redirects here"`, and album/band disambiguation lists. Strengthen the filter and prefer the
+   first *definitional* sentence.
+2. **Markov output is incoherent** when there is no knowledge hit. Markov cannot hold a thought.
+   Options: train TinyGPT (`--model tinygpt --steps N`), or make knowledge-retrieval the primary
+   path and use the model only for chit-chat.
+3. **Greeting is canned + identical every open.** User wants a varied opening thought.
+4. **No thinking UI.** User wants a collapsible "thinking" dropdown + loading animation while
+   processing, like mainstream assistants.
+5. **No memory compaction.** User wants long-context memory with compaction.
+6. **No thought queue.** User wants sequenced/queued thoughts processed when ready.
+7. **Curiosity has still never run an episode** (`total_episodes: 0`). `ScheduleConfig` in
+   `curiosity/scheduler.py`: `min_message_count=5`, `interval_minutes=60`. For 24/7 learning,
+   lower the threshold and interval, and/or seed the topic queue directly.
+8. **Only Wikipedia is scraped.** User wants news + social (Reddit JSON API).
+9. **Answer quality is retrieval-only** — no synthesis across multiple entries.
+
+## 8c. r510-command-center work (repo cloned to `/tmp/r510cc`)
+
+**Fly module bug — root cause found.** `flyctl` IS installed at `~/.fly/bin/flyctl` and
+authenticated (`matty@purepulse.one`), but **is not on `PATH`**, so `shutil.which("flyctl")`
+returns `None` and `fly.py` reports "flyctl not installed". The installer edits the shell profile,
+which a systemd/tty1 process never sources.
+→ Added `find_flyctl_executable()` to `config.py` (mirrors the existing
+`find_opencode_executable()` convention) + `flyctl_path` Config field.
+**STILL TODO:** wire `fly.py:84` to use it instead of bare `shutil.which("flyctl")`.
+
+**New module added:** `command_center/shaggoth.py` — `ShaggothState`
+(LEARNING/ONLINE/STALLED/IDLE/OFFLINE/ERROR), `ShaggothStatus`, `get_status()`. Reports uptime,
+curiosity scheduler liveness, episode count, knowledge entries, scraper stats. **Verified working
+on r510** (returned ONLINE, 305 entries, 161,004 words). The STALLED state exists to catch
+"daemon up but not actually learning".
+**STILL TODO:** wire into `app.py` + `screens.py`; add `storage.py` (per-filesystem + LVM free);
+add tests under `tests/`; commit and push.
+
+Test a module on r510 with a real package dir — importlib + `from __future__ import annotations`
+breaks dataclass resolution:
+```bash
+mkdir -p /tmp/cctest/command_center && touch /tmp/cctest/command_center/__init__.py
+cp <module>.py /tmp/cctest/command_center/ && cd /tmp/cctest && python3 -c "from command_center import shaggoth; print(shaggoth.get_status())"
+```
 
 ## 9. User's stated goals (verbatim intent)
 
