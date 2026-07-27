@@ -14,7 +14,7 @@ Repository:
 
 Production:
 
-`https://docs.relayapp.pro/ide`
+`https://app.relayapp.pro/`
 
 ## Mission
 

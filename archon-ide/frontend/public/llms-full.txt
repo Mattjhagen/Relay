@@ -1,6 +1,6 @@
 # Archon IDE — Full Product Context
 
-Canonical URL: https://docs.relayapp.pro/ide
+Canonical URL: https://app.relayapp.pro/
 Publisher: Relay
 Publisher URL: https://relayapp.pro/
 Source: https://github.com/Mattjhagen/archon-ide
@@ -32,12 +32,12 @@ Long: Archon IDE is a browser-based AI software-development workspace that combi
 
 ## Canonical links
 
-- Archon IDE: https://docs.relayapp.pro/ide
+- Archon IDE: https://app.relayapp.pro/
 - Relay: https://relayapp.pro/
 - GitHub: https://github.com/Mattjhagen/archon-ide
-- Sitemap: https://docs.relayapp.pro/idesitemap.xml
-- Crawler policy: https://docs.relayapp.pro/iderobots.txt
-- Concise AI context: https://docs.relayapp.pro/idellms.txt
+- Sitemap: https://app.relayapp.pro/sitemap.xml
+- Crawler policy: https://app.relayapp.pro/robots.txt
+- Concise AI context: https://app.relayapp.pro/llms.txt
 
 ## Privacy boundary
 

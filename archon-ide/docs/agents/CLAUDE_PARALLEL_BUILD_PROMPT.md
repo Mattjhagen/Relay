@@ -13,7 +13,7 @@ Repository:
 
 Production application:
 
-`https://docs.relayapp.pro/ide`
+`https://app.relayapp.pro/`
 
 Your job is not to produce a design document and wait. Your job is to inspect
 the repository, create a safe implementation plan, delegate independent

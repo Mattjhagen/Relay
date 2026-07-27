@@ -11,7 +11,7 @@ Read it before writing code, opening a branch, or reviewing a PR.
 |---|---|
 | Name | Archon IDE |
 | Repo | `github.com/Mattjhagen/archon-ide` |
-| Production | `https://docs.relayapp.pro/ide` |
+| Production | `https://app.relayapp.pro/` |
 | Stack | Rust (actix-web) backend + React/TypeScript frontend |
 | Deployment | Fly.io (`archon-ide-pacmac`, `ord` region) |
 | Auth | Supabase (GitHub OAuth + email magic links) |

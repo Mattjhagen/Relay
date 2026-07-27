@@ -3,7 +3,7 @@ Allow: /
 Disallow: /api/
 Disallow: /ws/
 
-Sitemap: https://docs.relayapp.pro/idesitemap.xml
+Sitemap: https://app.relayapp.pro/sitemap.xml
 
 # Search engines
 User-agent: Googlebot

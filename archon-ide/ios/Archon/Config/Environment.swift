@@ -23,6 +23,6 @@ enum Environment {
     }
     
     var apiBaseURL: URL {
-        URL(string: "https://docs.relayapp.pro/ideapi")!
+        URL(string: "https://app.relayapp.pro/api")!
     }
 }

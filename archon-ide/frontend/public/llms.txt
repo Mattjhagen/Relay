@@ -2,10 +2,10 @@
 
 > Archon is an open-source, browser-based AI coding agent and web IDE from Relay. It is designed for autonomous, multi-step software development with durable projects, conversations, and user-controlled reasoning depth.
 
-Canonical product URL: https://docs.relayapp.pro/ide
+Canonical product URL: https://app.relayapp.pro/
 Publisher: https://relayapp.pro/
 Source repository: https://github.com/Mattjhagen/archon-ide
-Logo: https://docs.relayapp.pro/idebrand/archon-oauth-logo-512.png
+Logo: https://app.relayapp.pro/brand/archon-oauth-logo-512.png
 
 ## What Archon does
 
@@ -23,11 +23,11 @@ Archon is for developers and teams looking for an AI coding agent, browser IDE, 
 
 ## Public resources
 
-- Product and sign in: https://docs.relayapp.pro/ide
+- Product and sign in: https://app.relayapp.pro/
 - Relay website: https://relayapp.pro/
 - Source code: https://github.com/Mattjhagen/archon-ide
-- Sitemap: https://docs.relayapp.pro/idesitemap.xml
-- Full AI-readable description: https://docs.relayapp.pro/idellms-full.txt
+- Sitemap: https://app.relayapp.pro/sitemap.xml
+- Full AI-readable description: https://app.relayapp.pro/llms-full.txt
 
 ## Access and privacy
 

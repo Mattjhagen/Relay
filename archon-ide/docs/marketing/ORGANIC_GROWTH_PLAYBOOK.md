@@ -147,7 +147,7 @@ Most AI coding chats stop exactly when the real work begins.
 We are building Archon: a full coding agent in the browser that plans, inspects,
 tests, retries, and keeps working—with your choice of model and reasoning depth.
 
-Try it: https://docs.relayapp.pro/ide
+Try it: https://app.relayapp.pro/
 
 ### LinkedIn launch
 
@@ -160,7 +160,7 @@ choice, and reviewable results.
 
 We are building it in public and will share the successful runs, the failed
 runs, the costs, and the fixes. The first release is live at
-https://docs.relayapp.pro/ide.
+https://app.relayapp.pro/.
 
 ### Short-video hook
 
