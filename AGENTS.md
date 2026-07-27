@@ -220,6 +220,53 @@ Shaggoth data 2.4 MB and growing slowly. Expanding the LVM into free space **req
 
 ---
 
+## 4e. Relevance fixes (later in the same session)
+
+**Symptom:** asked for a story, Shaggoth replied *"Kwak'wala, sentences begin with what was
+predicted by Planck's law was heavily influenced by Greek historian Dionysius of Halicarnassus"*
+— five unrelated subjects in one sentence.
+
+**Cause chain (all three linked):**
+1. Markov trained on an encyclopedia cannot hold a topic; it stitches fragments from unrelated
+   articles.
+2. That garbage was returned as `source="model"`. **`server.py:222` only triggers curiosity
+   auto-research when `source == "fallback"`** — so every incoherent answer *suppressed* the
+   research that would have taught it the topic. This is why `total_episodes` was stuck at 0.
+3. Normalizing BM25 scores against the best hit makes the top result **always exactly 1.0**, so
+   the `top_score >= 0.35` confidence check was a silent no-op. "you tell me a story" scored the
+   film *Brokeback Mountain* at 1.0 because the word "story" appears in it.
+
+**Fixes in `dialogue/engine.py`** (backups `.bak`, `.bak2`, `.bak3`):
+- `markov_is_usable()` — rejects topic-salad (>1 unrequested proper noun, >28 words, encyclopedia
+  artifacts, no terminal punctuation). Rejection is deliberate: the turn degrades to `fallback`,
+  which is what makes curiosity research fire.
+- `knowledge_is_relevant()` — requires the article **title** to overlap the question's content
+  words. A normalized score cannot express "nothing here is relevant"; title overlap can.
+- `_FILLER` set so conversational filler ("tell", "me", "story", "about") cannot carry a match.
+- `describe_unknown()` — relevant "I don't know X yet, researching it" instead of a random line.
+- Broadened `_QUESTION_HINT` + `.search()` instead of `.match()` so "you tell me a story" counts.
+- Strengthened `_NOISE` for lead-in cruft ("For other uses, see", "Not to be confused with").
+- **Gotcha:** `extract_keywords` is NOT imported in `engine.py` by default — must add
+  `from ..memory.store import extract_keywords` or you get a NameError and empty 500s on /chat.
+
+Verified: story→fallback+research, machine learning→Machine Learning, photosynthesis→Photosynthesis.
+
+## 4f. Cloudflare tunnel — UNBLOCKED
+
+`~/.cloudflared/cert.pem` **now exists on r510** (user completed `cloudflared tunnel login`).
+Named tunnel + `shaggoth.relayapp.pro` DNS route can now be created. `cloudflared` is at
+`~/.local/bin/cloudflared` (**not on PATH**). Existing running instance is an unrelated ephemeral
+quick-tunnel to port 3847 — leave it alone.
+
+## 4g. Site scraping seed list
+
+`~/seed_sites.py` — broad seed list across reference / science / health / tech / news-RSS /
+Reddit-JSON. Log: `~/seed_sites.log`.
+⚠️ **The scraper does NOT honour robots.txt** (`scraper/engine.py` has no robots handling). The
+list is therefore weighted to crawl-permissive sources (Wikimedia, Gutenberg, US government,
+open-access science) and uses RSS for news rather than crawling article pages. **Add robots.txt
+support before broadening to arbitrary sites.**
+
 ## 8b. Known-remaining Shaggoth issues (next session starts here)
 
 1. **Wikipedia cruft leaks into answers.** `_NOISE` in `dialogue/engine.py` still lets through
