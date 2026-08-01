@@ -143,6 +143,18 @@
         .cta-box h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
         .cta-box p { color: var(--text-dim); font-size: 16px; margin-bottom: 32px; }
 
+
+        /* vibeCodes section — composed from the existing tokens above:
+           no new fonts, no new colours, no new layout primitives. */
+        .vc-price { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px; }
+        .vc-price span { font-size: 13px; font-weight: 500; color: var(--text-muted); letter-spacing: 0; }
+        .vc-list { list-style: none; margin-top: 12px; }
+        .vc-list li { font-size: 13px; color: var(--text-muted); line-height: 1.9; }
+        .vc-soon { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); border: 1px solid var(--border-light); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+        .vc-note { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 28px; }
+        .vc-steps { counter-reset: vc; }
+        .vc-steps .link-column h4::before { counter-increment: vc; content: counter(vc) ". "; }
+
         /* Footer */
         .site-footer { border-top: 1px solid var(--border); padding: 32px 0; }
         .footer-container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
@@ -241,6 +253,92 @@
                     <p>Open-source iOS app, web platform, and documentation. Contribute, fork, or star on GitHub.</p>
                     <span class="arrow">→</span>
                 </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- VIBECODES -->
+    <section class="directory" id="vibecodes">
+        <div class="container">
+            <h2>vibeCodes</h2>
+            <p class="subtitle">Turn your LinkedIn profile or r&eacute;sum&eacute; into a personal website. No coding required.</p>
+
+            <div class="site-grid">
+                <div class="site-card">
+                    <div class="card-icon purple">&#9998;</div>
+                    <h3>Start from what you already have</h3>
+                    <p>Point it at your LinkedIn profile or upload a r&eacute;sum&eacute;. It reads your experience and drafts a complete portfolio site from it.</p>
+                </div>
+                <div class="site-card">
+                    <div class="card-icon cyan">&#9881;</div>
+                    <h3>Edit without touching code</h3>
+                    <p>Rewrite any section, reorder it, or drop it. Changes are yours to make directly &mdash; no template syntax, no HTML.</p>
+                </div>
+                <div class="site-card">
+                    <div class="card-icon green">&#9635;</div>
+                    <h3>Themes that already look finished</h3>
+                    <p>Pick a theme and the whole site follows it. Type, spacing and colour stay consistent without design work.</p>
+                </div>
+            </div>
+
+            <h2 style="margin-top:72px">How it works</h2>
+            <p class="subtitle">Three steps, and the first one is the only one that needs anything from you.</p>
+            <div class="link-columns vc-steps">
+                <div class="link-column">
+                    <h4>Bring your history</h4>
+                    <p style="font-size:13px;color:var(--text-muted);line-height:1.6">Connect a LinkedIn profile or upload a r&eacute;sum&eacute;.</p>
+                </div>
+                <div class="link-column">
+                    <h4>Get a draft</h4>
+                    <p style="font-size:13px;color:var(--text-muted);line-height:1.6">A full site is generated from it &mdash; sections, copy and layout.</p>
+                </div>
+                <div class="link-column">
+                    <h4>Make it yours</h4>
+                    <p style="font-size:13px;color:var(--text-muted);line-height:1.6">Edit any part of it, choose a theme, and preview as you go.</p>
+                </div>
+            </div>
+
+            <h2 style="margin-top:72px">Pricing</h2>
+            <p class="subtitle">Indicative tiers &mdash; see the pricing page for what is currently billable.</p>
+            <div class="site-grid">
+                <div class="site-card">
+                    <h3>Free</h3>
+                    <div class="vc-price">$0</div>
+                    <p>Start building your presence.</p>
+                    <ul class="vc-list">
+                        <li>1 site</li>
+                        <li>Basic minimal theme</li>
+                    </ul>
+                </div>
+                <div class="site-card">
+                    <h3>Pro</h3>
+                    <div class="vc-price">$12 <span>/ month</span></div>
+                    <p>For professionals and freelancers.</p>
+                    <ul class="vc-list">
+                        <li>Up to 3 sites</li>
+                        <li>All premium themes</li>
+                        <li>Custom domains <span class="vc-soon">Soon</span></li>
+                        <li>Analytics <span class="vc-soon">Soon</span></li>
+                    </ul>
+                </div>
+                <div class="site-card">
+                    <h3>Business</h3>
+                    <div class="vc-price">$49 <span>/ month</span></div>
+                    <p>For agencies and founders.</p>
+                    <ul class="vc-list">
+                        <li>Unlimited sites</li>
+                        <li>White-labeling</li>
+                        <li>Team roles <span class="vc-soon">Soon</span></li>
+                        <li>Priority support</li>
+                    </ul>
+                </div>
+            </div>
+
+            <p class="vc-note">Items marked <span class="vc-soon">Soon</span> are built but not yet switched on. Publishing to a live address is still rolling out &mdash; today you can generate, edit and preview a site.</p>
+
+            <div class="hero-actions" style="margin-top:36px">
+                <a href="https://vibecodes.space" class="btn btn-primary">Start building &rarr;</a>
+                <a href="https://vibecodes.space/pricing" class="btn btn-secondary">See pricing</a>
             </div>
         </div>
     </section>
