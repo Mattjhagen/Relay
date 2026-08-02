@@ -55,7 +55,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://docs.relayapp.pro/css/chat-widget.css">
+    <link rel="stylesheet" href="/assets/chat-widget.css">
     <style>
         :root {
             --bg: #06060a;
@@ -429,8 +429,8 @@
     </div>
 </footer>
 
-<script src="https://docs.relayapp.pro/js/chat-widget.js"></script>
 <div id="chat-bubble-mount"></div>
+<script src="/assets/chat-widget.js" defer></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(function() {});

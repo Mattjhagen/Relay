@@ -10,8 +10,12 @@
 
 ## Medium Priority
 - [ ] Add `_headers` file to Relay repo for Cloudflare Pages security headers (CSP, HSTS, X-Frame-Options)
-- [ ] Chat widget: connect to real AI backend instead of hardcoded responses
-- [ ] Chat widget: persist conversation history across page navigations
+- [x] Chat widget: connect to real AI backend instead of hardcoded responses
+      (Shaggoth at ai.relayapp.pro; canned answers remain only as the
+      offline fallback)
+- [x] Chat widget: persist conversation history across page navigations
+- [ ] Chat widget: port `assets/chat-widget.{js,css}` to the archon-ios repo
+      so docs.relayapp.pro gets the same bubble
 - [ ] PWA: add install prompt banner on relayapp.pro
 - [ ] PWA: offline fallback page for relayapp.pro
 - [ ] Sitemap: add relayapp.pro/ide.html once ide.relayapp.pro is set up
