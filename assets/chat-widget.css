@@ -1,24 +1,31 @@
 /* Relay chat bubble.
  *
- * The variables below are the ones index.html already defines on :root. Each
- * one falls back to a literal so the widget can be dropped onto a page that
- * does not define the Relay palette (the docs site, a bare landing page) and
- * still look like itself rather than inheriting whatever that page happens to
- * set on body.
+ * Two copies of this file exist and are meant to stay byte-identical:
+ * Relay/assets/chat-widget.css (relayapp.pro) and
+ * archon-ios/docs/css/shaggoth-widget.css (docs.relayapp.pro). Change one,
+ * copy it to the other -- the widget this replaced rotted precisely because
+ * each site kept its own fork of it.
+ *
+ * Both sites use the same palette under different variable names:
+ * relayapp.pro sets --bg2/--text/--text-dim, the docs site sets
+ * --bg-secondary/--text-primary/--text-secondary. Each lookup tries the Relay
+ * name, then the docs name, then a literal -- so the widget tracks whichever
+ * site it lands on, and still looks like itself on a page that defines
+ * neither.
  */
 .relay-chat {
-    --rc-bg: var(--bg2, #0c0c14);
-    --rc-bg-raised: var(--bg3, #12121e);
+    --rc-bg: var(--bg2, var(--bg-secondary, #0c0c14));
+    --rc-bg-raised: var(--bg3, var(--bg-tertiary, #12121e));
     --rc-border: var(--border, #1a1a2e);
     --rc-border-light: var(--border-light, #252540);
-    --rc-text: var(--text, #e8e8f0);
-    --rc-text-dim: var(--text-dim, #9898b0);
+    --rc-text: var(--text, var(--text-primary, #e8e8f0));
+    --rc-text-dim: var(--text-dim, var(--text-secondary, #9898b0));
     --rc-text-muted: var(--text-muted, #686880);
     --rc-accent: var(--accent, #7c5cfc);
     --rc-accent-hover: var(--accent-hover, #9078ff);
     --rc-green: var(--green, #34d399);
     --rc-red: var(--red, #f87171);
-    --rc-font: var(--font, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+    --rc-font: var(--font, var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif));
 
     position: fixed;
     /* Padded for the iPhone home indicator. Without the inset the launcher
