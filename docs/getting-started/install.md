@@ -3,8 +3,9 @@
 Download the latest versions of the Shaggoth app below:
 
 ### Android
-Download and install the latest APK on your Android device:
-[Download Android APK (v1.0.1)](https://github.com/Mattjhagen/Shaggoth_APP/releases/download/v1.0.1-android/app-release.apk)
+Download and install the latest APK directly, or join the Google Play Internal Test:
+- [Download Android APK (v1.0.1)](https://github.com/Mattjhagen/Shaggoth_APP/releases/download/v1.0.1/app-release.apk)
+- [Join Google Play Internal Test](https://play.google.com/apps/internaltest/4701485940511636054)
 
 ### iOS
 *(Waiting for TestFlight approval)*
